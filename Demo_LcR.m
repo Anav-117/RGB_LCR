@@ -21,8 +21,8 @@ clear all;
 addpath('utilities');
 
 % set parameters
-nrow        = 120;        % rows of HR face image
-ncol        = 100;        % cols of LR face image
+nrow        = 360;        % rows of HR face image
+ncol        = 260;        % cols of HR face image
 nTraining   = 360;        % number of training sample
 nTesting    = 40;         % number of ptest sample
 upscale     = 16;          % upscaling factor 
@@ -38,18 +38,10 @@ YL_Green    = zeros(nrow,ncol,nTraining);
 YH_Blue     = zeros(nrow,ncol,nTraining); 
 YL_Blue     = zeros(nrow,ncol,nTraining);
 
-bb_psnr_Red    = zeros(1,nTesting);
-sr_psnr_Red    = zeros(1,nTesting);
-bb_ssim_Red    = zeros(1,nTesting);
-sr_ssim_Red    = zeros(1,nTesting);
-bb_psnr_Blue    = zeros(1,nTesting);
-sr_psnr_Blue    = zeros(1,nTesting);
-bb_ssim_Blue    = zeros(1,nTesting);
-sr_ssim_Blue    = zeros(1,nTesting);
-bb_psnr_Green    = zeros(1,nTesting);
-sr_psnr_Green    = zeros(1,nTesting);
-bb_ssim_Green    = zeros(1,nTesting);
-sr_ssim_Green    = zeros(1,nTesting);
+bb_psnr    = zeros(1,nTesting);
+sr_psnr    = zeros(1,nTesting);
+bb_ssim    = zeros(1,nTesting);
+sr_ssim    = zeros(1,nTesting);
 
 
 % generate the training and testing samples from the FEI Face Database
@@ -74,30 +66,51 @@ for TestImgIndex = 1:nTesting
     greenChannel = im_h(:,:,2); % Green channel
     blueChannel = im_h(:,:,3); % Blue channel
 
-    [im_Channel_Red, im_L_Red, Diff_Red] = SuperResolution(redChannel,upscale,BlurWindow,YH_Red,YL_Red,patch_size,overlap,tau,nrow,ncol,TestImgIndex);
-    [im_Channel_Blue, im_L_Blue, Diff_Blue] = SuperResolution(blueChannel,upscale,BlurWindow,YH_Blue,YL_Blue,patch_size,overlap,tau,nrow,ncol,TestImgIndex);
-    [im_Channel_Green, im_L_Green, Diff_Green] = SuperResolution(greenChannel,upscale,BlurWindow,YH_Green,YL_Green,patch_size,overlap,tau,nrow,ncol,TestImgIndex);
-    
+    [im_Channel_Red, im_L_Red, Diff_Red, im_b_R] = SuperResolution(redChannel,upscale,BlurWindow,YH_Red,YL_Red,patch_size,overlap,tau,nrow,ncol);
+    [im_Channel_Blue, im_L_Blue, Diff_Blue, im_b_B] = SuperResolution(blueChannel,upscale,BlurWindow,YH_Blue,YL_Blue,patch_size,overlap,tau,nrow,ncol);
+    [im_Channel_Green, im_L_Green, Diff_Green, im_b_G] = SuperResolution(greenChannel,upscale,BlurWindow,YH_Green,YL_Green,patch_size,overlap,tau,nrow,ncol);
     
     im_SR = cat(3, im_Channel_Red, im_Channel_Green, im_Channel_Blue);
+    im_bb = cat(3, im_b_R, im_b_G, im_b_B);
 
-    strw = strcat('results_RGB/',num2str(TestImgIndex),'_SR.bmp');
+    YCBCR_H = rgb2ycbcr(im_h);
+    YCBCR_SR = rgb2ycbcr(im_SR);
+    YCBCR_BB = rgb2ycbcr(im_bb);
+
+    luma_H = YCBCR_H(:,:,1);
+    luma_SR = YCBCR_SR(:,:,1);
+    luma_BB = YCBCR_BB(:,:,1);
+
+    % compute PSNR and SSIM for Bicubic and our method
+    bb_psnr(TestImgIndex) = psnr(luma_BB,luma_H);
+    bb_ssim(TestImgIndex) = ssim(luma_BB,luma_H);
+    
+    sr_psnr(TestImgIndex) = psnr(luma_SR,luma_H);
+    sr_ssim(TestImgIndex) = ssim(luma_SR,luma_H);
+
+    % display the objective results (PSNR and SSIM)
+    fprintf('PSNR for Bicubic Interpolation: %f dB\n', bb_psnr(TestImgIndex));
+    fprintf('PSNR for LcR Recovery: %f dB\n', sr_psnr(TestImgIndex));
+    fprintf('SSIM for Bicubic Interpolation: %f dB\n', bb_ssim(TestImgIndex));
+    fprintf('SSIM for LcR Recovery: %f dB\n', sr_ssim(TestImgIndex));
+
+    strw = strcat('results/',num2str(TestImgIndex),'_SR.bmp');
     imwrite(uint8(im_SR),strw,'bmp');
 
     im_L = cat(3, im_L_Red, im_L_Green, im_L_Blue);
-    strL = strcat('results_RGB/',num2str(TestImgIndex),'_l.jpg');
+    strL = strcat('results/',num2str(TestImgIndex),'_l.jpg');
     imwrite(uint8(im_L),strL,'jpg');
 
     im_Diff = cat(3, Diff_Red, Diff_Green, Diff_Blue);
-    strL = strcat('results_RGB/',num2str(TestImgIndex),'_Diff.jpg');
+    strL = strcat('results/',num2str(TestImgIndex),'_Diff.jpg');
     imwrite(uint8(im_Diff),strL,'jpg');
 end
 
-% 
-% fprintf('===============================================\n');
-% fprintf('Average PSNR of Bicubic Interpolation: %f\n', sum(bb_psnr)/nTesting);
-% fprintf('Average PSNR of LcR method: %f\n', sum(sr_psnr)/nTesting);
-% fprintf('Average SSIM of Bicubic Interpolation: %f\n', sum(bb_ssim)/nTesting);
-% fprintf('Average SSIM of LcR method: %f\n', sum(sr_ssim)/nTesting);
-% fprintf('===============================================\n');
+
+fprintf('===============================================\n');
+fprintf('Average PSNR of Bicubic Interpolation: %f\n', sum(bb_psnr)/nTesting);
+fprintf('Average PSNR of LcR method: %f\n', sum(sr_psnr)/nTesting);
+fprintf('Average SSIM of Bicubic Interpolation: %f\n', sum(bb_ssim)/nTesting);
+fprintf('Average SSIM of LcR method: %f\n', sum(sr_ssim)/nTesting);
+fprintf('===============================================\n');
 
